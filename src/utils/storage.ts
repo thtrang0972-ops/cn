@@ -8,7 +8,6 @@ import {
   UserRoleType,
   WeeklyRemarksStore,
   UserAccount,
-  ScoreAdjustmentLog,
 } from '../types/discipline';
 import {
   INITIAL_METADATA,
@@ -22,19 +21,17 @@ import {
 } from '../data/initialData';
 
 const STORAGE_KEYS = {
-  METADATA: 'thcs_nene_metadata_v1',
-  STUDENTS: 'thcs_nene_students_v1',
-  WEEKS: 'thcs_nene_weeks_v1',
-  CURRENT_WEEK_ID: 'thcs_nene_current_week_id_v1',
-  RECORDS: 'thcs_nene_weekly_records_v1',
-  MORNING_DUTY: 'thcs_nene_morning_duty_v1',
-  AFTERNOON: 'thcs_nene_afternoon_v1',
-  CURRENT_USER_ROLE: 'thcs_nene_user_role_v1',
-  WEEKLY_REMARKS: 'thcs_nene_weekly_remarks_v1',
-  ACCOUNTS: 'thcs_nene_accounts_v1',
-  CURRENT_ACCOUNT_ID: 'thcs_nene_current_acc_id_v1',
-  SCORE_LOGS: 'thcs_nene_score_adjustment_logs_v1',
-  CLEARED_BY_USER: 'thcs_nene_cleared_by_user_v3',
+  METADATA: 'cn_nene_metadata_v1',
+  STUDENTS: 'cn_nene_students_v1',
+  WEEKS: 'cn_nene_weeks_v1',
+  CURRENT_WEEK_ID: 'cn_nene_current_week_id_v1',
+  RECORDS: 'cn_nene_weekly_records_v1',
+  MORNING_DUTY: 'cn_nene_morning_duty_v1',
+  AFTERNOON: 'cn_nene_afternoon_v1',
+  CURRENT_USER_ROLE: 'cn_nene_user_role_v1',
+  WEEKLY_REMARKS: 'cn_nene_weekly_remarks_v1',
+  ACCOUNTS: 'cn_nene_accounts_v1',
+  CURRENT_ACCOUNT_ID: 'cn_nene_current_acc_id_v1',
 };
 
 export interface AppState {
@@ -49,7 +46,6 @@ export interface AppState {
   morningDutyRecords: MorningDutyRecord[];
   afternoonRecords: AfternoonRecord[];
   weeklyRemarks: Record<number, WeeklyRemarksStore>;
-  scoreLogs: ScoreAdjustmentLog[];
 }
 
 export function loadAppState(): AppState {
@@ -70,88 +66,27 @@ export function loadAppState(): AppState {
     if (metadata.homeroomTeacher === 'Cô Nguyễn Thị Mai Phương' || metadata.homeroomTeacher?.includes('Mai Phương') || !metadata.homeroomTeacher) {
       metadata.homeroomTeacher = 'Cô Nguyễn Thị Thuỳ Trang';
     }
-    // Cập nhật tên trường thành Trường TH và THCS Phước Hưng
-    if (!metadata.schoolName || metadata.schoolName.includes('Lê Quý Đôn') || metadata.schoolName.includes('TH & THCS')) {
-      metadata.schoolName = 'Trường TH và THCS Phước Hưng';
-    }
-    // Cập nhật lớp 9A3 theo yêu cầu người dùng
-    if (!metadata.className || metadata.className === '8A1') {
-      metadata.className = '9A3';
-      metadata.grade = 9;
-    }
-    if ((metadata as any).treasurerName) {
-      delete (metadata as any).treasurerName;
-    }
 
-    // Theo yêu cầu người dùng: xoá hết danh sách học sinh mẫu để người dùng tự đưa danh sách của mình lên
-    const isCleared = localStorage.getItem(STORAGE_KEYS.CLEARED_BY_USER);
-    let students: Student[] = [];
-    if (!isCleared) {
-      // Đánh dấu đã xóa danh sách mẫu để đưa danh sách mới lên
-      localStorage.setItem(STORAGE_KEYS.CLEARED_BY_USER, 'true');
-      localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify([]));
-      students = [];
-    } else if (rawStudents) {
-      try {
-        students = JSON.parse(rawStudents);
-      } catch {
-        students = [];
+    const students: Student[] = rawStudents ? JSON.parse(rawStudents) : INITIAL_STUDENTS;
+    const weeks: WeekInfo[] = rawWeeks ? JSON.parse(rawWeeks) : INITIAL_WEEKS;
+    const currentWeekId: number = rawWeekId ? JSON.parse(rawWeekId) : 4;
+    const currentUserRole: UserRoleType = rawRole ? (rawRole as UserRoleType) : 'gvcn';
+    const accounts: UserAccount[] = rawAccounts ? JSON.parse(rawAccounts) : INITIAL_ACCOUNTS;
+    // Cập nhật tên GVCN và quyền nhóm 1 nếu lưu từ phiên trước
+    accounts.forEach((acc) => {
+      if (acc.id === 'acc-gvcn' && (acc.displayName?.includes('Mai Phương') || !acc.displayName)) {
+        acc.displayName = 'Cô Nguyễn Thị Thuỳ Trang';
       }
-    }
+      if (acc.id === 'acc-nhom1') {
+        acc.assignedGroupIds = [2];
+      }
+    });
 
-    let weeks: WeekInfo[] = rawWeeks ? JSON.parse(rawWeeks) : INITIAL_WEEKS;
-    if (!weeks || weeks.length < INITIAL_WEEKS.length) {
-      weeks = INITIAL_WEEKS;
-    } else {
-      // Luôn đồng bộ ngày tháng năm chuẩn (Thứ 2 đến Chủ nhật) từ INITIAL_WEEKS
-      weeks = INITIAL_WEEKS.map((initW) => {
-        const found = weeks.find((w) => w.id === initW.id);
-        return found ? { ...found, startDate: initW.startDate, endDate: initW.endDate } : initW;
-      });
-    }
-    let currentAccountId: string = rawAccountId !== null ? rawAccountId : 'acc-gvcn';
-    if (currentAccountId === 'acc-thuquy') currentAccountId = 'acc-gvcn';
-    let currentUserRole: UserRoleType = rawRole ? (rawRole as UserRoleType) : 'gvcn';
-    if ((currentUserRole as string) === 'thuQuy') currentUserRole = 'gvcn';
-    let accounts: UserAccount[] = rawAccounts ? JSON.parse(rawAccounts) : INITIAL_ACCOUNTS;
-
-    // Loại bỏ hoàn toàn tài khoản Thủ quỹ theo yêu cầu người dùng
-    accounts = accounts.filter(
-      (a) =>
-        (a.role as string) !== 'thuQuy' &&
-        a.id !== 'acc-thuquy' &&
-        !a.username.toLowerCase().includes('thuquy') &&
-        !a.title.toLowerCase().includes('thủ quỹ') &&
-        !a.title.toLowerCase().includes('thủ quỷ')
-    );
-
-    // Luôn đồng bộ tên học sinh đại diện cho từng tài khoản cán sự và 6 nhóm trưởng
-    accounts = syncAccountsWithRosterAndMeta(accounts, metadata, students);
+    const currentAccountId: string = rawAccountId !== null ? rawAccountId : 'acc-gvcn';
     const weeklyRemarks: Record<number, WeeklyRemarksStore> = rawRemarks
       ? JSON.parse(rawRemarks)
       : INITIAL_WEEKLY_REMARKS;
     
-    // Đảm bảo tên nhóm trưởng trong weeklyRemarks khớp đúng với chức vụ (tránh trùng tên Lớp trưởng / Lớp phó)
-    Object.values(weeklyRemarks).forEach((w) => {
-      if (w.groupRemarks) {
-        if (w.groupRemarks[2]?.leaderName === 'Trần Gia Hưng') {
-          w.groupRemarks[2].leaderName = metadata.groupLeaders?.[2] || 'Đặng Ngọc Mai';
-        }
-        if (w.groupRemarks[3]?.leaderName === 'Lê Hoàng Yến Nhi') {
-          w.groupRemarks[3].leaderName = metadata.groupLeaders?.[3] || 'Ngô Hồng Phúc';
-        }
-      }
-    });
-
-    // Đảm bảo teacherGroupNotes tuần 4 có dữ liệu mẫu sẵn sàng
-    if (!weeklyRemarks[4]?.teacherGroupNotes || Object.keys(weeklyRemarks[4].teacherGroupNotes).length === 0) {
-      if (!weeklyRemarks[4]) {
-        weeklyRemarks[4] = INITIAL_WEEKLY_REMARKS[4];
-      } else {
-        weeklyRemarks[4].teacherGroupNotes = INITIAL_WEEKLY_REMARKS[4]?.teacherGroupNotes;
-      }
-    }
-
     // Đồng bộ tên GVCN trong lời dặn nếu cần
     Object.values(weeklyRemarks).forEach((w) => {
       if (w.officerRemarks?.teacherAdvice?.teacherName?.includes('Mai Phương')) {
@@ -161,28 +96,50 @@ export function loadAppState(): AppState {
     
     let weeklyRecords: Record<number, Record<string, StudentWeeklyRecord>> = {};
     if (rawRecords) {
-      try {
-        weeklyRecords = JSON.parse(rawRecords);
-      } catch {
-        weeklyRecords = {};
+      weeklyRecords = JSON.parse(rawRecords);
+    } else {
+      // Seed tuần 4 mặc định
+      weeklyRecords[4] = INITIAL_WEEK4_RECORDS;
+      // Khởi tạo sơ bộ cho tuần 3 để so sánh
+      const week3Rec: Record<string, StudentWeeklyRecord> = {};
+      for (const s of INITIAL_STUDENTS) {
+        week3Rec[s.id] = {
+          studentId: s.id,
+          diTre: s.groupId === 5 ? 1 : 0,
+          nghiCP: 0,
+          nghiKP: 0,
+          boTiet: 0,
+          ktbKlbKsb: s.groupId === 6 ? 1 : 0,
+          khongDongPhuc2: 0,
+          diemTot: s.groupId <= 2 ? 2 : 1,
+          phatBieu: 2,
+          khongDongPhuc5: 0,
+          matTratTu: 0,
+          khongThamGiaVS: 0,
+          noiTuc: 0,
+          xaRac: 0,
+          trucVSBan: 0,
+          huHongTS: 0,
+          voLeGV: 0,
+          dungDienThoai: 0,
+        };
       }
+      weeklyRecords[3] = week3Rec;
     }
 
     const morningDutyRecords: MorningDutyRecord[] = rawMorning
       ? JSON.parse(rawMorning)
-      : [];
+      : INITIAL_MORNING_DUTY_RECORDS;
 
     const afternoonRecords: AfternoonRecord[] = rawAfternoon
       ? JSON.parse(rawAfternoon)
-      : [];
-
-    const scoreLogs = loadScoreLogs();
+      : INITIAL_AFTERNOON_RECORDS;
 
     return {
       metadata,
       students,
       weeks,
-      currentWeekId: rawWeekId ? Number(rawWeekId) : 4,
+      currentWeekId,
       currentUserRole,
       currentAccountId,
       accounts,
@@ -190,165 +147,23 @@ export function loadAppState(): AppState {
       morningDutyRecords,
       afternoonRecords,
       weeklyRemarks,
-      scoreLogs,
     };
   } catch (err) {
-    console.error('Lỗi khi tải dữ liệu từ localStorage, khởi tạo rỗng cho người dùng:', err);
+    console.error('Lỗi khi tải dữ liệu từ localStorage, sử dụng dữ liệu mặc định:', err);
     return {
       metadata: INITIAL_METADATA,
-      students: [],
+      students: INITIAL_STUDENTS,
       weeks: INITIAL_WEEKS,
       currentWeekId: 4,
       currentUserRole: 'gvcn',
       currentAccountId: 'acc-gvcn',
       accounts: INITIAL_ACCOUNTS,
-      weeklyRecords: {},
-      morningDutyRecords: [],
-      afternoonRecords: [],
+      weeklyRecords: { 4: INITIAL_WEEK4_RECORDS },
+      morningDutyRecords: INITIAL_MORNING_DUTY_RECORDS,
+      afternoonRecords: INITIAL_AFTERNOON_RECORDS,
       weeklyRemarks: INITIAL_WEEKLY_REMARKS,
-      scoreLogs: [],
     };
   }
-}
-
-// Tự động phát hiện và loại bỏ các bản ghi nhật ký sửa điểm bị trùng lặp
-export function deduplicateScoreLogs(logs: ScoreAdjustmentLog[]): ScoreAdjustmentLog[] {
-  const seen = new Set<string>();
-  return logs.filter((log) => {
-    // Coi là trùng nếu cùng tuần, cùng học sinh, cùng tiêu chí, cùng điểm cũ & mới trong khoảng thời gian sát nhau
-    const roundedTime = log.timestamp
-      ? Math.floor(new Date(log.timestamp).getTime() / 60000)
-      : 0;
-    const key = `${log.weekId}-${log.studentId}-${log.criterionKey}-${log.oldValue}-${log.newValue}-${roundedTime}`;
-    if (seen.has(key)) {
-      return false; // Bỏ bớt bản ghi trùng!
-    }
-    seen.add(key);
-    return true;
-  });
-}
-
-export function loadScoreLogs(): ScoreAdjustmentLog[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SCORE_LOGS);
-    if (!raw) return [];
-    const parsed: ScoreAdjustmentLog[] = JSON.parse(raw);
-    const deduped = deduplicateScoreLogs(parsed);
-    if (deduped.length !== parsed.length) {
-      saveScoreLogs(deduped);
-    }
-    return deduped;
-  } catch {
-    return [];
-  }
-}
-
-export function saveScoreLogs(logs: ScoreAdjustmentLog[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEYS.SCORE_LOGS, JSON.stringify(logs));
-  } catch (e) {
-    console.error('Không thể lưu nhật ký điểm:', e);
-  }
-}
-
-export function addScoreAdjustmentLog(
-  log: Omit<ScoreAdjustmentLog, 'id' | 'timestamp'>
-): ScoreAdjustmentLog[] {
-  const current = loadScoreLogs();
-  const now = Date.now();
-
-  // Ngăn chặn ghi trùng bản ghi nếu vừa thêm cùng học sinh + tiêu chí + giá trị trong 3 giây
-  const isDuplicate = current.some((c) => {
-    const diff = c.timestamp ? now - new Date(c.timestamp).getTime() : 999999;
-    return (
-      diff < 3000 &&
-      c.weekId === log.weekId &&
-      c.studentId === log.studentId &&
-      c.criterionKey === log.criterionKey &&
-      c.oldValue === log.oldValue &&
-      c.newValue === log.newValue
-    );
-  });
-
-  if (isDuplicate) {
-    return current;
-  }
-
-  const newEntry: ScoreAdjustmentLog = {
-    ...log,
-    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-    timestamp: new Date().toISOString(),
-  };
-  const updated = [newEntry, ...current];
-  saveScoreLogs(updated);
-  return updated;
-}
-
-export function deleteScoreAdjustmentLog(logId: string): ScoreAdjustmentLog[] {
-  try {
-    const current = loadScoreLogs();
-    const updated = current.filter((l) => l.id !== logId);
-    saveScoreLogs(updated);
-    return updated;
-  } catch (e) {
-    console.error('Lỗi khi xóa bản ghi nhật ký điểm:', e);
-    return [];
-  }
-}
-
-export function clearAllScoreLogs(): void {
-  try {
-    localStorage.removeItem(STORAGE_KEYS.SCORE_LOGS);
-  } catch (e) {
-    console.error('Lỗi khi xóa nhật ký điểm:', e);
-  }
-}
-
-export function syncAccountsWithRosterAndMeta(
-  accounts: UserAccount[],
-  metadata: ClassMetadata,
-  students: Student[]
-): UserAccount[] {
-  const DEFAULT_LEADER_NAMES: Record<number, string> = {
-    1: 'Nguyễn Văn An',
-    2: 'Đặng Ngọc Mai',
-    3: 'Ngô Hồng Phúc',
-    4: 'Phạm Thanh Tùng',
-    5: 'Hoàng Kim Cúc',
-    6: 'Đào Thu Hiền',
-  };
-
-  return accounts.map((acc) => {
-    const updated = { ...acc };
-    if (updated.id === 'acc-gvcn' || updated.role === 'gvcn') {
-      updated.displayName = metadata.homeroomTeacher || 'Cô Nguyễn Thị Thuỳ Trang';
-    } else if (updated.role === 'lopTruong') {
-      updated.displayName = metadata.monitorName || 'Trần Gia Hưng';
-    } else if (updated.role === 'lopPhoHocTap') {
-      updated.displayName = metadata.academicViceMonitorName || 'Nguyễn Thảo Linh';
-    } else if (updated.role === 'lopPhoLaoDong') {
-      updated.displayName = metadata.laborViceMonitorName || 'Bùi Quang Khải';
-    } else if (updated.role === 'lopPhoTratTu') {
-      updated.displayName = metadata.disciplineViceMonitorName || metadata.viceMonitorName || 'Lê Hoàng Yến Nhi';
-    } else if (updated.role.startsWith('nhomTruong')) {
-      const groupNum = parseInt(updated.role.replace('nhomTruong', ''), 10);
-      if (!isNaN(groupNum)) {
-        updated.assignedGroupIds = [groupNum];
-        // 1. Ưu tiên tên cấu hình trong metadata.groupLeaders nếu có
-        // 2. Tìm học sinh trong nhóm được đánh dấu isLeader và không kiêm nhiệm Lớp trưởng / Lớp phó
-        // 3. Sử dụng tên mặc định chuẩn
-        const explicitLeader = metadata.groupLeaders?.[groupNum];
-        const studentLeader = students.find(
-          (s) => s.groupId === groupNum && s.isLeader && s.role !== 'Lớp trưởng' && !s.role?.includes('Lớp phó')
-        );
-        const fallbackName = DEFAULT_LEADER_NAMES[groupNum] || `Nhóm trưởng ${groupNum}`;
-
-        updated.displayName = explicitLeader || (studentLeader ? studentLeader.name : fallbackName);
-        updated.description = `Nhóm trưởng ${groupNum}: Phụ trách theo dõi và chấm điểm các học sinh thuộc Nhóm ${groupNum}.`;
-      }
-    }
-    return updated;
-  });
 }
 
 export function saveAppState(state: AppState): void {
@@ -364,9 +179,6 @@ export function saveAppState(state: AppState): void {
     localStorage.setItem(STORAGE_KEYS.MORNING_DUTY, JSON.stringify(state.morningDutyRecords));
     localStorage.setItem(STORAGE_KEYS.AFTERNOON, JSON.stringify(state.afternoonRecords));
     localStorage.setItem(STORAGE_KEYS.WEEKLY_REMARKS, JSON.stringify(state.weeklyRemarks));
-    if (state.scoreLogs) {
-      saveScoreLogs(state.scoreLogs);
-    }
   } catch (err) {
     console.error('Không thể lưu state vào localStorage:', err);
   }
@@ -374,20 +186,18 @@ export function saveAppState(state: AppState): void {
 
 export function resetToInitialData(): AppState {
   localStorage.clear();
-  localStorage.setItem(STORAGE_KEYS.CLEARED_BY_USER, 'true');
   return {
     metadata: INITIAL_METADATA,
-    students: [],
+    students: INITIAL_STUDENTS,
     weeks: INITIAL_WEEKS,
     currentWeekId: 4,
     currentUserRole: 'gvcn',
     currentAccountId: 'acc-gvcn',
     accounts: INITIAL_ACCOUNTS,
-    weeklyRecords: {},
-    morningDutyRecords: [],
-    afternoonRecords: [],
+    weeklyRecords: { 4: INITIAL_WEEK4_RECORDS },
+    morningDutyRecords: INITIAL_MORNING_DUTY_RECORDS,
+    afternoonRecords: INITIAL_AFTERNOON_RECORDS,
     weeklyRemarks: INITIAL_WEEKLY_REMARKS,
-    scoreLogs: [],
   };
 }
 
