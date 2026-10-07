@@ -35,11 +35,11 @@ import {
 import { calculateGroupSummaries } from './utils/scoring';
 
 // ============================================================================
-// CẤU HÌNH ĐỒNG BỘ ĐÁM MÂY FIREBASE (PROJECT: trang-90cbb)
+// CẤU HÌNH ĐỒNG BỘ ĐÁM MÂY FIREBASE (PROJECT: trang-9618d)
 // ============================================================================
 const CANDIDATE_URLS = [
-  'https://trang-90cbb-default-rtdb.asia-southeast1.firebasedatabase.app',
-  'https://trang-90cbb-default-rtdb.firebaseio.com',
+  'https://trang-9618d-default-rtdb.asia-southeast1.firebasedatabase.app',
+  'https://trang-9618d-default-rtdb.firebaseio.com',
 ];
 
 let activeFirebaseUrl = CANDIDATE_URLS[0];
